@@ -117,7 +117,7 @@ Retained memory after building the tree (key bytes excluded):
 HOT trades update speed for lookups, scans and memory, as reported in the
 paper. Use it for read-mostly indexes, sparse keys such as UUIDs and hashes,
 and scan-heavy workloads; stay with ART for write-heavy ones.
-[benchmark/REPORT.md](benchmark/REPORT.md) has the methodology and full
+[benchmark/README.md](benchmark/README.md) has the methodology and full
 numbers. Reproduce with:
 
 ```sh
