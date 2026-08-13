@@ -110,7 +110,7 @@ func TestTreeTraversalCancelEarly(t *testing.T) {
 func TestTreeTraversalWordsStats(t *testing.T) {
 	t.Parallel()
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	stats := collectStats(tree.Iterator(TraverseAll))
 
 	assert.Equal(t, wordsStats, stats)
@@ -333,7 +333,7 @@ func TestPrefixTraversalWords(t *testing.T) {
 
 	var found []string
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	tree.ForEachPrefix(Key("antisa"), func(node Node) bool {
 		if node.Kind() == Leaf {
 			val, ok := node.Value().([]byte)
@@ -360,7 +360,7 @@ func TestPrefixTraversalDescWords(t *testing.T) {
 
 	var found []string
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	tree.ForEachPrefix(Key("antisa"), func(node Node) bool {
 		if node.Kind() == Leaf {
 			val, ok := node.Value().([]byte)
@@ -390,7 +390,7 @@ func TestTraversalForEachWordsBothDirections(t *testing.T) {
 		desc []string
 	)
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	tree.ForEach(func(node Node) bool {
 		val, ok := node.Value().([]byte)
 		assert.True(t, ok)
@@ -422,7 +422,7 @@ func TestTraversalIteratorWordsBothDirections(t *testing.T) {
 		desc []string
 	)
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	iterateWithCallback(tree.Iterator(), func(node Node) bool {
 		val, ok := node.Value().([]byte)
 		assert.True(t, ok)
@@ -534,7 +534,7 @@ func TestTreeIteratorConcurrentModification(t *testing.T) {
 func TestTreeIterateWordsStats(t *testing.T) {
 	t.Parallel()
 
-	tree, _ := treeWithData("test/assets/words.txt")
+	tree, _ := sharedWordsTree(t)
 	stats := collectStats(tree.Iterator(TraverseAll))
 	assert.Equal(t, wordsStats, stats)
 

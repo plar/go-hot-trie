@@ -1,0 +1,31 @@
+name: Fuzz
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # nightly
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: fuzz (${{ matrix.target }}, GOEXPERIMENT=${{ matrix.goexperiment || 'none' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [FuzzTreeOps, FuzzKeyEncoding, FuzzDeterminism]
+        goexperiment: ['', 'simd']
+    env:
+      GOEXPERIMENT: ${{ matrix.goexperiment }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - run: go test -run '^$' -fuzz ${{ matrix.target }} -fuzztime 10m ./
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-failures-${{ matrix.target }}-${{ matrix.goexperiment || 'scalar' }}
+          path: testdata/fuzz
+          if-no-files-found: ignore

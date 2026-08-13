@@ -1,20 +1,15 @@
 package hot
 
-// Ported from github.com/plar/go-adaptive-radix-tree tree_benchmark_test.go
-// with structure statistics adapted to HOT's deterministic node counts.
+// Benchmarks for the tree implementation, on the datasets used by
+// go-adaptive-radix-tree. Structure assertions live in the tests
+// (tree_traversal_test.go); benchmarks only measure.
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/stretchr/testify/assert"
-)
-
-// Benchmarks for the tree implementation.
-func BenchmarkWordsTreeInsert(b *testing.B) {
-	words := loadTestFile("test/assets/words.txt")
-
+func benchmarkInsert(b *testing.B, path string) {
+	words := loadTestFile(path)
+	b.ReportAllocs()
 	b.ResetTimer()
-
 	for n := 0; n < b.N; n++ {
 		tree := New()
 		for _, w := range words {
@@ -23,11 +18,10 @@ func BenchmarkWordsTreeInsert(b *testing.B) {
 	}
 }
 
-func BenchmarkWordsTreeSearch(b *testing.B) {
-	tree, words := treeWithData("test/assets/words.txt")
-
+func benchmarkSearch(b *testing.B, path string) {
+	tree, words := treeWithData(path)
+	b.ReportAllocs()
 	b.ResetTimer()
-
 	for n := 0; n < b.N; n++ {
 		for _, w := range words {
 			tree.Search(w)
@@ -35,117 +29,44 @@ func BenchmarkWordsTreeSearch(b *testing.B) {
 	}
 }
 
-func BenchmarkWordsTreeIterator(b *testing.B) {
-	tree, _ := treeWithData("test/assets/words.txt")
-
+func benchmarkIterator(b *testing.B, path string) {
+	tree, _ := treeWithData(path)
+	b.ReportAllocs()
 	b.ResetTimer()
-
-	stats := collectStats(tree.Iterator(TraverseAll))
-	assert.Equal(b, wordsStats, stats)
-}
-
-func BenchmarkWordsTreeForEach(b *testing.B) {
-	tree, _ := treeWithData("test/assets/words.txt")
-
-	b.ResetTimer()
-
-	stats := treeStats{}
-	tree.ForEach(stats.processStats, TraverseAll)
-	assert.Equal(b, wordsStats, stats)
-
-	stats = treeStats{}
-	tree.ForEach(stats.processStats, TraverseLeaf)
-	assert.Equal(b, treeStats{235886, 0, 0, 0}, stats)
-
-	stats = treeStats{}
-	tree.ForEach(stats.processStats, TraverseNode)
-	assert.Equal(b, treeStats{0, wordsStats.node8Count, wordsStats.node16Count, wordsStats.node32Count}, stats)
-}
-
-func BenchmarkUUIDsTreeInsert(b *testing.B) {
-	words := loadTestFile("test/assets/uuid.txt")
-
-	b.ResetTimer()
-
 	for n := 0; n < b.N; n++ {
-		tree := New()
-		for _, w := range words {
-			tree.Insert(w, w)
+		it := tree.Iterator(TraverseAll)
+		for it.HasNext() {
+			if _, err := it.Next(); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
 
-func BenchmarkUUIDsTreeSearch(b *testing.B) {
-	tree, words := treeWithData("test/assets/uuid.txt")
-
+func benchmarkForEach(b *testing.B, path string) {
+	tree, _ := treeWithData(path)
+	b.ReportAllocs()
 	b.ResetTimer()
-
 	for n := 0; n < b.N; n++ {
-		for _, w := range words {
-			tree.Search(w)
+		cnt := 0
+		tree.ForEach(func(Node) bool { cnt++; return true }, TraverseAll)
+		if cnt == 0 {
+			b.Fatal("empty traversal")
 		}
 	}
 }
 
-func BenchmarkUUIDsTreeIterator(b *testing.B) {
-	tree, _ := treeWithData("test/assets/uuid.txt")
+func BenchmarkWordsTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/words.txt") }
+func BenchmarkWordsTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/words.txt") }
+func BenchmarkWordsTreeIterator(b *testing.B) { benchmarkIterator(b, "test/assets/words.txt") }
+func BenchmarkWordsTreeForEach(b *testing.B)  { benchmarkForEach(b, "test/assets/words.txt") }
 
-	b.ResetTimer()
+func BenchmarkUUIDsTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/uuid.txt") }
+func BenchmarkUUIDsTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/uuid.txt") }
+func BenchmarkUUIDsTreeIterator(b *testing.B) { benchmarkIterator(b, "test/assets/uuid.txt") }
+func BenchmarkUUIDsTreeForEach(b *testing.B)  { benchmarkForEach(b, "test/assets/uuid.txt") }
 
-	stats := collectStats(tree.Iterator(TraverseAll))
-	assert.Equal(b, uuidStats, stats)
-}
-
-func BenchmarkUUIDsTreeForEach(b *testing.B) {
-	tree, _ := treeWithData("test/assets/uuid.txt")
-
-	b.ResetTimer()
-
-	stats := treeStats{}
-	tree.ForEach(stats.processStats, TraverseAll)
-	assert.Equal(b, uuidStats, stats)
-}
-
-func BenchmarkHSKTreeInsert(b *testing.B) {
-	words := loadTestFile("test/assets/hsk_words.txt")
-
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
-		tree := New()
-		for _, w := range words {
-			tree.Insert(w, w)
-		}
-	}
-}
-
-func BenchmarkHSKTreeSearch(b *testing.B) {
-	tree, words := treeWithData("test/assets/hsk_words.txt")
-
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
-		for _, w := range words {
-			tree.Search(w)
-		}
-	}
-}
-
-func BenchmarkHSKTreeIterator(b *testing.B) {
-	tree, _ := treeWithData("test/assets/hsk_words.txt")
-
-	b.ResetTimer()
-
-	stats := collectStats(tree.Iterator(TraverseAll))
-	assert.Equal(b, hskStats, stats)
-}
-
-func BenchmarkHSKTreeForEach(b *testing.B) {
-	tree, _ := treeWithData("test/assets/hsk_words.txt")
-
-	b.ResetTimer()
-
-	stats := treeStats{}
-	tree.ForEach(stats.processStats, TraverseAll)
-	assert.Equal(b, hskStats, stats)
-}
+func BenchmarkHSKTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/hsk_words.txt") }
+func BenchmarkHSKTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/hsk_words.txt") }
+func BenchmarkHSKTreeIterator(b *testing.B) { benchmarkIterator(b, "test/assets/hsk_words.txt") }
+func BenchmarkHSKTreeForEach(b *testing.B)  { benchmarkForEach(b, "test/assets/hsk_words.txt") }

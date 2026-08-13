@@ -109,10 +109,9 @@ func (t *tree) resolveUnderflow(path []pathEntry, i int) {
 	for i > 0 {
 		parent := path[i-1].n
 		j := path[i-1].idx
+		// n is always a compound node here: the first iteration re-reads the
+		// node deleteAt just modified, later ones the merged replacement.
 		n := childAt(parent, j)
-		if isLeaf(n) {
-			break
-		}
 
 		// An underflow cannot occur when the sibling is a BiNode, i.e. when
 		// the sibling subtree holds more than one entry.
@@ -163,19 +162,16 @@ func (t *tree) resolveUnderflow(path []pathEntry, i int) {
 }
 
 // fixHeightsFrom recomputes stored heights bottom-up along the path,
-// starting at level from. Only the subtree along the path was modified, so
-// the walk stops at the first level whose height is unchanged. Levels taken
-// over by hoisted leaves are skipped.
+// starting at level from. The walk deliberately runs all the way to the
+// root: a hoist replaces a level with a node whose stored height is already
+// consistent, so an early "unchanged here" break could skip a stale
+// ancestor above the replacement. Structural deletes are rare enough that
+// the full walk is cheap.
 func (t *tree) fixHeightsFrom(path []pathEntry, from int) {
 	for l := min(from, len(path)-1); l >= 0; l-- {
 		n := path[l].n
-		if isLeaf(n) {
-			continue
+		if h := computeHeight(n); hdr(n).height != h {
+			hdr(n).height = h
 		}
-		h := computeHeight(n)
-		if hdr(n).height == h {
-			break
-		}
-		hdr(n).height = h
 	}
 }

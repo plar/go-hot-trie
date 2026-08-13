@@ -49,6 +49,8 @@ bench-smoke:
 fuzz:
 	go test -run '^$$' -fuzz FuzzTreeOps -fuzztime 30s ./
 	go test -run '^$$' -fuzz FuzzKeyEncoding -fuzztime 30s ./
+	go test -run '^$$' -fuzz FuzzDeterminism -fuzztime 30s ./
+	GOEXPERIMENT=simd go test -run '^$$' -fuzz FuzzTreeOps -fuzztime 30s ./
 
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)

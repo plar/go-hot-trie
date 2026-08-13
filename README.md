@@ -66,7 +66,8 @@ func main() {
 ```
 
 Keys are stored by reference. Do not modify a key slice after inserting it.
-The tree is not safe for concurrent use, same as go-adaptive-radix-tree.
+The tree is not safe for concurrent use while a writer runs; concurrent
+readers without a writer are fine.
 
 # SIMD
 

@@ -3,6 +3,7 @@ package hot
 import (
 	"bufio"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,6 +160,21 @@ func loadTestFile(path string) [][]byte {
 	}
 
 	return words
+}
+
+var (
+	wordsOnce   sync.Once
+	sharedWords *tree
+	sharedData  [][]byte
+)
+
+// sharedWordsTree returns a words tree shared by read-only tests. Callers
+// must not mutate it.
+func sharedWordsTree(_ *testing.T) (*tree, [][]byte) {
+	wordsOnce.Do(func() {
+		sharedWords, sharedData = treeWithData("test/assets/words.txt")
+	})
+	return sharedWords, sharedData
 }
 
 // treeWithData creates a tree with the data from the given file.

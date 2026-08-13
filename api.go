@@ -99,6 +99,10 @@ type Iterator interface {
 }
 
 // Tree is a Height Optimized Trie interface.
+//
+// A Tree is not safe for concurrent use while any goroutine mutates it.
+// Any number of goroutines may read (Search, iteration, Minimum/Maximum)
+// concurrently as long as no Insert or Delete runs at the same time.
 type Tree interface {
 	// Insert adds a new key-value pair into the tree.
 	// If the key already exists in the tree, it updates its value and returns the old value along with true.
