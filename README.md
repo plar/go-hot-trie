@@ -5,16 +5,19 @@ A Height Optimized Trie Implementation in Go
 
 This library provides a Go implementation of HOT, the Height Optimized Trie [1][2].
 It shares the `Tree` interface with [go-adaptive-radix-tree](https://github.com/plar/go-adaptive-radix-tree),
-so you can swap one for the other with an import change.
+so most code can swap between the two with an import change. The node
+`Kind` constants differ: HOT reports Node8/Node16/Node32.
 
 HOT packs a binary Patricia trie into compound nodes with a fixed maximum
-fanout of 32. The span of each node adapts to the data, the tree height is
-provably minimal, and the structure does not depend on insertion order. A
-node lookup compares all 32 sparse partial keys in one AVX2 instruction.
+fanout of 32. The span of each node adapts to the data. Insertion produces
+a provably minimal tree height and the same structure for every insertion
+order; deletion keeps the height close to minimal through node merges. A
+node lookup compares all sparse partial keys of a node in parallel with
+AVX2 instructions.
 
 Features:
 * Read-optimized: beats ART on lookups, ordered scans and memory (see benchmarks below)
-* Keys are sorted **lexicographically** by byte value: range scans, prefix lookups
+* Keys are sorted **lexicographically** by byte value: ordered iteration and prefix lookups
 * Minimum / Maximum value lookups
 * Ordered, reverse and prefix-based iteration
 * Any byte array is a valid key, including null bytes and keys that are prefixes of other keys
@@ -76,7 +79,7 @@ GOEXPERIMENT=simd go build ./...
 
 Go 1.26 and 1.27 both work. Without the experiment, or on other
 architectures, the library falls back to scalar kernels with a BMI2 `PEXT`
-fast path on amd64 and lands within 5-15% of SIMD search performance.
+fast path on amd64 and lands within about 15% of SIMD search performance.
 
 # Performance
 
@@ -126,9 +129,9 @@ GOEXPERIMENT=simd go test -bench . -benchmem
 
 [docs/DESIGN.md](docs/DESIGN.md) describes the node layout, the insertion
 and deletion cases from the paper, the key encoding, and where the
-implementation deviates from the paper and why. The test suite verifies
+implementation deviates from the paper and why. The test suite checks inserted trees for
 height minimality against the Kovács-Kis minimum-height partitioning and
-checks that the structure is independent of insertion order.
+for independence from insertion order.
 
 # References
 
