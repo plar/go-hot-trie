@@ -2,7 +2,9 @@ package hot
 
 import (
 	"bytes"
+	"maps"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +27,15 @@ func fuzzKey(pattern []byte, rep byte) []byte {
 // and wrong Delete return values are all visible.
 //
 // Records: 1 op byte, 1 length/repeat byte, then length%17+1 pattern bytes.
+// rec encodes one op-stream record, panicking if the pattern length does
+// not match what the decoder will read back.
+func rec(op, lenRep byte, pattern ...byte) []byte {
+	if len(pattern) != int(lenRep)%17+1 {
+		panic("seed pattern length does not match its length byte")
+	}
+	return append([]byte{op, lenRep}, pattern...)
+}
+
 func FuzzTreeOps(f *testing.F) {
 	f.Add([]byte("\x00\x03abc\x01\x03abc\x02\x03abc"))
 	f.Add([]byte("\x00\x01a\x00\x02ab\x00\x00\x00\x01\x00\x01\x01\x02ab"))
@@ -33,19 +44,20 @@ func FuzzTreeOps(f *testing.F) {
 	// Enough distinct single-byte inserts to split the root...
 	split := []byte{}
 	for i := range byte(40) {
-		split = append(split, 0x00, 0x00, i)
+		split = append(split, rec(0x00, 0x00, i)...)
 	}
 	f.Add(split)
 	// ...and a copy that deletes most of them again (merges, pull-downs).
 	churn := slices.Clone(split)
 	for i := range byte(35) {
-		churn = append(churn, 0x01, 0x00, i)
+		churn = append(churn, rec(0x01, 0x00, i)...)
 	}
 	f.Add(churn)
-	// Long keys sharing a long prefix (gather/scatter specs, deep paths).
+	// Long keys sharing a long prefix (gather/scatter specs, deep paths):
+	// lenRep 0x20 decodes to a 16-byte pattern repeated 5 times (80 bytes).
 	long := []byte{}
 	for i := range byte(6) {
-		long = append(long, 0x00, 0x80|16, 'p', 'r', 'e', 'f', 'i', 'x', '-', 'p', 'r', 'e', 'f', 'i', 'x', '-', 'k', i)
+		long = append(long, rec(0x00, 0x20, 'p', 'r', 'e', 'f', 'i', 'x', '-', 'p', 'r', 'e', 'f', 'i', 'x', '-', 'k', i)...)
 	}
 	f.Add(long)
 
@@ -54,12 +66,12 @@ func FuzzTreeOps(f *testing.F) {
 		ref := map[string]int{}
 		ctr := 0
 
-		var itSnap []string
-		var itPos int
 		var it Iterator
-		itValid := false
+		var itPrev string
+		var itSeen, itCount int
+		itValid, itFirst := false, true
 
-		ops := 0
+		ops, lastCheck := 0, 0
 		for len(data) >= 2 {
 			op := data[0]
 			kl := int(data[1])%17 + 1
@@ -108,9 +120,12 @@ func FuzzTreeOps(f *testing.F) {
 					t.Fatalf("search %q: value=%v want %d", key, v, want)
 				}
 			case 3: // advance a live ordered iterator
+				// Oracle without a sorted snapshot: while the iterator is
+				// valid ref is frozen, so a strictly increasing sequence of
+				// ref-member keys of length len(ref) is exactly sorted(ref).
 				if it == nil {
-					itSnap = sortedKeys(ref)
-					itPos = 0
+					itCount = len(ref)
+					itSeen, itFirst = 0, true
 					it = tr.Iterator()
 					itValid = true
 				}
@@ -121,19 +136,25 @@ func FuzzTreeOps(f *testing.F) {
 						t.Fatalf("iterator after modification: err=%v", err)
 					}
 					it = nil
-				case itPos >= len(itSnap):
+				case itSeen >= itCount:
 					if err != ErrNoMoreNodes {
 						t.Fatalf("exhausted iterator: err=%v", err)
 					}
 					it = nil
 				default:
-					if err != nil || string(n.Key()) != itSnap[itPos] {
-						t.Fatalf("iterator at %d: key=%v err=%v want %q", itPos, n, err, itSnap[itPos])
+					if err != nil {
+						t.Fatalf("iterator at %d: err=%v", itSeen, err)
 					}
-					itPos++
+					k := string(n.Key())
+					if _, ok := ref[k]; !ok || (!itFirst && k <= itPrev) {
+						t.Fatalf("iterator at %d: key %q (member=%v prev=%q)", itSeen, k, ok, itPrev)
+					}
+					itPrev, itFirst = k, false
+					itSeen++
 				}
 			}
-			if ops%64 == 0 {
+			if ops-lastCheck >= max(64, tr.Size()) {
+				lastCheck = ops
 				checkInvariants(t, tr)
 			}
 		}
@@ -166,25 +187,8 @@ func FuzzTreeOps(f *testing.F) {
 		// Ordered iteration, reverse iteration, minimum and maximum against
 		// the sorted reference.
 		want := sortedKeys(ref)
-		i := 0
-		tr.ForEach(func(n Node) bool {
-			if i >= len(want) || string(n.Key()) != want[i] {
-				t.Fatalf("iteration mismatch at %d", i)
-			}
-			i++
-			return true
-		})
-		if i != len(want) {
-			t.Fatalf("iterated %d of %d", i, len(want))
-		}
-		i = len(want)
-		tr.ForEach(func(n Node) bool {
-			i--
-			if i < 0 || string(n.Key()) != want[i] {
-				t.Fatalf("reverse iteration mismatch at %d", i)
-			}
-			return true
-		}, TraverseReverse)
+		expectOrder(t, "forward", want, func(cb Callback) { tr.ForEach(cb) })
+		expectOrder(t, "reverse", reversed(want), func(cb Callback) { tr.ForEach(cb, TraverseReverse) })
 		if len(want) > 0 {
 			if v, ok := tr.Minimum(); !ok || v.(int) != ref[want[0]] {
 				t.Fatalf("minimum: %v %v", v, ok)
@@ -201,45 +205,44 @@ func FuzzTreeOps(f *testing.F) {
 }
 
 func sortedKeys(ref map[string]int) []string {
-	out := make([]string, 0, len(ref))
-	for k := range ref {
-		out = append(out, k)
-	}
-	slices.Sort(out)
-	return out
+	return slices.Sorted(maps.Keys(ref))
 }
 
-func checkPrefixScan(t *testing.T, tr *tree, ref map[string]int, prefix string) {
+// expectOrder asserts that a leaf scan yields exactly want, in order.
+func expectOrder(t *testing.T, name string, want []string, scan func(Callback)) {
 	t.Helper()
-	var want []string
-	for k := range ref {
-		if len(k) >= len(prefix) && k[:len(prefix)] == prefix {
-			want = append(want, k)
-		}
-	}
-	slices.Sort(want)
 	i := 0
-	tr.ForEachPrefix(Key(prefix), func(n Node) bool {
+	scan(func(n Node) bool {
 		if i >= len(want) || string(n.Key()) != want[i] {
-			t.Fatalf("prefix %q mismatch at %d: got %q", prefix, i, n.Key())
+			t.Fatalf("%s scan mismatch at %d: got %q", name, i, n.Key())
 		}
 		i++
 		return true
 	})
 	if i != len(want) {
-		t.Fatalf("prefix %q: got %d of %d", prefix, i, len(want))
+		t.Fatalf("%s scan: got %d of %d", name, i, len(want))
 	}
-	i = len(want)
-	tr.ForEachPrefix(Key(prefix), func(n Node) bool {
-		i--
-		if i < 0 || string(n.Key()) != want[i] {
-			t.Fatalf("reverse prefix %q mismatch at %d", prefix, i)
+}
+
+func reversed(s []string) []string {
+	out := slices.Clone(s)
+	slices.Reverse(out)
+	return out
+}
+
+// checkPrefixScan asserts forward and reverse ForEachPrefix against the
+// prefix-filtered reference.
+func checkPrefixScan(t *testing.T, tr *tree, ref map[string]int, prefix string) {
+	t.Helper()
+	var want []string
+	for k := range ref {
+		if strings.HasPrefix(k, prefix) {
+			want = append(want, k)
 		}
-		return true
-	}, TraverseReverse)
-	if i != 0 {
-		t.Fatalf("reverse prefix %q: %d not visited", prefix, i)
 	}
+	slices.Sort(want)
+	expectOrder(t, "prefix "+prefix, want, func(cb Callback) { tr.ForEachPrefix(Key(prefix), cb) })
+	expectOrder(t, "reverse prefix "+prefix, reversed(want), func(cb Callback) { tr.ForEachPrefix(Key(prefix), cb, TraverseReverse) })
 }
 
 // FuzzKeyEncoding checks that the escaped encoding with the virtual
@@ -301,19 +304,10 @@ func FuzzDeterminism(f *testing.F) {
 		if len(keys) < 2 {
 			return
 		}
-		shape := func(order [][]byte) string {
-			tr := newTree()
-			for _, k := range order {
-				tr.Insert(k, 0)
-			}
-			var sb bytes.Buffer
-			treeShape(tr.root, &sb)
-			return sb.String()
-		}
-		streamOrder := shape(keys)
+		streamOrder := shapeOf(keys)
 		sorted := slices.Clone(keys)
 		slices.SortFunc(sorted, bytes.Compare)
-		if sortedOrder := shape(sorted); streamOrder != sortedOrder {
+		if sortedOrder := shapeOf(sorted); streamOrder != sortedOrder {
 			t.Fatalf("structure depends on insertion order:\n%s\nvs\n%s", streamOrder, sortedOrder)
 		}
 	})

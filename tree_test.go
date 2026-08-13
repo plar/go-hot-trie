@@ -134,7 +134,7 @@ func TestTreeInsertAndNodeGrowth(t *testing.T) {
 func TestTreeWordsInsertMinMax(t *testing.T) {
 	t.Parallel()
 
-	tree, _ := sharedWordsTree(t)
+	tree, _ := sharedWordsTree()
 
 	minimum := minimumLeaf(tree.root)
 	assert.Equal(t, []byte("A"), minimum.value)

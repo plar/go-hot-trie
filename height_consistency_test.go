@@ -32,34 +32,34 @@ func TestHeightConsistencyUnderDeletion(t *testing.T) {
 		rng.Shuffle(len(keys), func(i, j int) { keys[i], keys[j] = keys[j], keys[i] })
 		for di, k := range keys {
 			tr.Delete(k)
-			if tr.root != nil && !isLeaf(tr.root) {
-				if bad := findStaleHeight(tr.root); bad != 0 {
-					t.Fatalf("seed %d: stale height after delete %d/%d (stored %d)", seed, di, len(keys), bad)
-				}
+			if tr.root != nil && !isLeaf(tr.root) && staleHeight(tr.root) {
+				t.Fatalf("seed %d: stale height after delete %d/%d", seed, di, len(keys))
 			}
 		}
 	}
 }
 
-func findStaleHeight(p unsafe.Pointer) uint8 {
+// staleHeight is the cheap height-only subset of checkNode, for per-delete
+// loops where the full invariant checker would be too slow.
+func staleHeight(p unsafe.Pointer) bool {
 	if isLeaf(p) {
-		return 0
+		return false
 	}
-	if ch := computeHeight(p); ch != hdr(p).height {
-		return hdr(p).height
+	if computeHeight(p) != hdr(p).height {
+		return true
 	}
 	for _, c := range childrenOf(p) {
-		if b := findStaleHeight(c); b != 0 {
-			return b
+		if staleHeight(c) {
+			return true
 		}
 	}
-	return 0
+	return false
 }
 
 // TestDatasetInvariants runs the structural invariant checker over the
 // bundled dataset trees.
 func TestDatasetInvariants(t *testing.T) {
-	tr, _ := sharedWordsTree(t)
+	tr, _ := sharedWordsTree()
 	checkInvariants(t, tr)
 	for ds, want := range map[string]treeStats{
 		"test/assets/uuid.txt":      uuidStats,

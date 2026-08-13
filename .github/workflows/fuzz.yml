@@ -21,6 +21,13 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+      - name: Restore fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/go-build/fuzz
+          key: fuzz-${{ matrix.target }}-${{ matrix.goexperiment || 'scalar' }}-${{ github.run_id }}
+          restore-keys: |
+            fuzz-${{ matrix.target }}-${{ matrix.goexperiment || 'scalar' }}-
       - run: go test -run '^$' -fuzz ${{ matrix.target }} -fuzztime 10m ./
       - name: Upload failing inputs
         if: failure()

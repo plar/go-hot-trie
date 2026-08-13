@@ -56,15 +56,34 @@ func benchmarkForEach(b *testing.B, path string) {
 	}
 }
 
+func benchmarkDelete(b *testing.B, path string) {
+	words := loadTestFile(path)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		b.StopTimer()
+		tree := New()
+		for _, w := range words {
+			tree.Insert(w, w)
+		}
+		b.StartTimer()
+		for _, w := range words {
+			tree.Delete(w)
+		}
+	}
+}
+
 func BenchmarkWordsTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/words.txt") }
 func BenchmarkWordsTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/words.txt") }
 func BenchmarkWordsTreeIterator(b *testing.B) { benchmarkIterator(b, "test/assets/words.txt") }
 func BenchmarkWordsTreeForEach(b *testing.B)  { benchmarkForEach(b, "test/assets/words.txt") }
+func BenchmarkWordsTreeDelete(b *testing.B)   { benchmarkDelete(b, "test/assets/words.txt") }
 
 func BenchmarkUUIDsTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/uuid.txt") }
 func BenchmarkUUIDsTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/uuid.txt") }
 func BenchmarkUUIDsTreeIterator(b *testing.B) { benchmarkIterator(b, "test/assets/uuid.txt") }
 func BenchmarkUUIDsTreeForEach(b *testing.B)  { benchmarkForEach(b, "test/assets/uuid.txt") }
+func BenchmarkUUIDsTreeDelete(b *testing.B)   { benchmarkDelete(b, "test/assets/uuid.txt") }
 
 func BenchmarkHSKTreeInsert(b *testing.B)   { benchmarkInsert(b, "test/assets/hsk_words.txt") }
 func BenchmarkHSKTreeSearch(b *testing.B)   { benchmarkSearch(b, "test/assets/hsk_words.txt") }

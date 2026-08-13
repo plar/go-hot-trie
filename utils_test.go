@@ -170,7 +170,7 @@ var (
 
 // sharedWordsTree returns a words tree shared by read-only tests. Callers
 // must not mutate it.
-func sharedWordsTree(_ *testing.T) (*tree, [][]byte) {
+func sharedWordsTree() (*tree, [][]byte) {
 	wordsOnce.Do(func() {
 		sharedWords, sharedData = treeWithData("test/assets/words.txt")
 	})

@@ -83,6 +83,18 @@ func checkNode(t *testing.T, p unsafe.Pointer) int {
 	return total
 }
 
+// shapeOf renders the structure of a tree built from keys in the given
+// order (see treeShape), for determinism comparison.
+func shapeOf(keys [][]byte) string {
+	tr := newTree()
+	for _, k := range keys {
+		tr.Insert(k, 0)
+	}
+	var sb bytes.Buffer
+	treeShape(tr.root, &sb)
+	return sb.String()
+}
+
 // treeShape renders the structure (positions, sparse keys, leaf keys) for
 // determinism comparison.
 func treeShape(p unsafe.Pointer, sb *bytes.Buffer) {

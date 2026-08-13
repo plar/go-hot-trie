@@ -1,7 +1,6 @@
 package hot
 
 import (
-	"fmt"
 	"math/rand"
 	"slices"
 	"strings"
@@ -26,21 +25,19 @@ func TestDeleteUnderflowCascade(t *testing.T) {
 			if h := hdr(tr.root).height; h < 2 {
 				t.Fatalf("expected a split tree, height %d", h)
 			}
-			del := make([]Key, len(keys))
-			copy(del, keys)
+			del := slices.Clone(keys)
 			switch order {
 			case "reverse":
-				for i, j := 0, len(del)-1; i < j; i, j = i+1, j-1 {
-					del[i], del[j] = del[j], del[i]
-				}
-			case "inside-out":
+				slices.Reverse(del)
+			case "inside-out": // alternate outward from the middle
 				mid := len(del) / 2
 				var mixed []Key
-				for i := range del {
-					if mid+i/2 < len(del) && i%2 == 0 {
-						mixed = append(mixed, del[mid+i/2])
-					} else if mid-1-i/2 >= 0 {
-						mixed = append(mixed, del[mid-1-i/2])
+				for l, r := mid-1, mid; l >= 0 || r < len(del); l, r = l-1, r+1 {
+					if r < len(del) {
+						mixed = append(mixed, del[r])
+					}
+					if l >= 0 {
+						mixed = append(mixed, del[l])
 					}
 				}
 				del = mixed
@@ -194,22 +191,12 @@ func TestPrefixScanNulPrefix(t *testing.T) {
 	for i, k := range keys {
 		tr.Insert(Key(k), i)
 	}
+	ref := map[string]int{}
+	for i, k := range keys {
+		ref[k] = i
+	}
 	for _, prefix := range []string{"a\x00", "\x00", "a", "b\x00", "a\x00\x00"} {
-		var got []string
-		tr.ForEachPrefix(Key(prefix), func(n Node) bool {
-			got = append(got, string(n.Key()))
-			return true
-		})
-		var want []string
-		for _, k := range keys {
-			if strings.HasPrefix(k, prefix) {
-				want = append(want, k)
-			}
-		}
-		slices.Sort(want)
-		if fmt.Sprint(got) != fmt.Sprint(want) {
-			t.Fatalf("prefix %q: got %q want %q", prefix, got, want)
-		}
+		checkPrefixScan(t, tr, ref, prefix)
 	}
 }
 

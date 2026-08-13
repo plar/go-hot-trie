@@ -157,21 +157,28 @@ func (t *tree) resolveUnderflow(path []pathEntry, i int) {
 		i--
 	}
 	if changed {
-		t.fixHeightsFrom(path, i)
+		// i is the deepest level resolveUnderflow modified (in place or by
+		// replacement); ancestors above it may hold stale heights.
+		t.fixHeightsFrom(path, i-1)
 	}
 }
 
-// fixHeightsFrom recomputes stored heights bottom-up along the path,
-// starting at level from. The walk deliberately runs all the way to the
-// root: a hoist replaces a level with a node whose stored height is already
-// consistent, so an early "unchanged here" break could skip a stale
-// ancestor above the replacement. Structural deletes are rare enough that
-// the full walk is cheap.
+// fixHeightsFrom recomputes stored heights bottom-up along the path.
+//
+// Contract: from must be the deepest level whose CHILD changed (the first
+// unmodified ancestor of the replacement), never a replaced level itself —
+// a freshly built replacement is internally consistent, so starting on it
+// would break early and skip stale ancestors above. With that contract the
+// early break is sound: heights are pure functions of the children, each
+// ancestor has exactly one changed child slot, so an unchanged height at
+// one level implies nothing above it changed either.
 func (t *tree) fixHeightsFrom(path []pathEntry, from int) {
-	for l := min(from, len(path)-1); l >= 0; l-- {
+	for l := from; l >= 0; l-- {
 		n := path[l].n
-		if h := computeHeight(n); hdr(n).height != h {
-			hdr(n).height = h
+		h := computeHeight(n)
+		if hdr(n).height == h {
+			break
 		}
+		hdr(n).height = h
 	}
 }
